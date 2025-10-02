@@ -1,0 +1,211 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual Jonesboro Scavenger Hunt - Complete</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;padding:0;background:#f7fafc;color:#111}
+header{background:#0f4c81;color:#fff;padding:16px 20px;text-align:center}
+.wrap{max-width:980px;margin:18px auto;padding:0 16px}
+.card{background:#fff;border-radius:10px;box-shadow:0 6px 20px rgba(12,15,22,.06);padding:14px;margin-bottom:14px}
+h1,h2,h3{margin:0 0 8px}
+textarea,input[type="text"],input[type="number"]{width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #ccc;box-sizing:border-box}
+button.btn{display:inline-block;padding:8px 12px;border-radius:8px;background:#0f4c81;color:#fff;border:none;cursor:pointer;margin-top:6px}
+button.btn:hover{background:#0b3560}
+small{font-size:13px;color:#444}
+img.thumb{width:80px;height:60px;object-fit:cover;border-radius:4px;border:1px solid #ccc;margin-top:4px}
+img.fullimg{width:100%;max-width:500px;border-radius:6px;margin-top:6px;border:1px solid #ccc}
+.collapsible{background:#e0e0e0;color:#111;cursor:pointer;padding:10px;width:100%;border:none;text-align:left;outline:none;font-size:16px;border-radius:6px;margin-top:6px}
+.active, .collapsible:hover{background:#d0d0d0}
+.content{padding:0 10px;display:none;overflow:hidden;background-color:#f7f7f7;border-radius:6px;margin-bottom:8px}
+.preview-box{background:#f1f1f1;padding:10px;border-radius:6px;margin-top:10px}
+.preview-box p{margin:6px 0;}
+</style>
+</head>
+<body>
+<header>
+  <h1>Virtual Jonesboro Scavenger Hunt</h1>
+  <small>Preview answers, validate required fields, submit; teachers can review and manage submissions</small>
+</header>
+<main class="wrap">
+
+
+<!-- Student Submission Form -->
+<div class="card">
+  <h2>Student Submission</h2>
+  <div id="timer" style="font-weight:bold;color:#0f4c81;margin-bottom:8px;">Time Remaining: 30:00</div>
+  <p>Enter your team/student name and answer all scavenger hunt questions. Upload screenshots (optional).</p>
+  <label>Team / Student Name:</label>
+  <input type="text" id="teamName" placeholder="Enter team or student name">
+  <ol id="questionsList">
+    ${[1,2,3,4,5,6,7,8].map(i=>`
+    <li>
+      <label>Question ${i}:</label><br>
+      <input type="text" id="q${i}" placeholder="Type your answer here"><br>
+      <input type="file" id="img${i}" accept="image/*" capture="environment">
+      <img id="thumb${i}" class="thumb hidden">
+    </li>`).join('')}
+  </ol>
+  <button class="btn" onclick="previewStudent()">Preview Answers & Screenshots</button>
+  <div id="previewArea" class="preview-box hidden"></div>
+  <button class="btn" onclick="submitStudent()">Submit</button>
+  <span id="status" style="margin-left:12px;color:#0f4c81;font-weight:600"></span>
+</div>
+
+
+<!-- Teacher Panel -->
+<div class="card">
+  <h2>Teacher Panel (Password Required)</h2>
+  <input type="password" id="teacherPass" placeholder="Enter password">
+  <button class="btn" onclick="unlockTeacher()">Login</button>
+
+
+  <div id="teacherPanel" class="hidden">
+    <h3>Submissions</h3>
+    <div id="submissionContainer"></div>
+    <button class="btn" onclick="downloadCSV()">Download CSV</button>
+    <button class="btn" onclick="clearAllSubmissions()">Clear All Submissions</button>
+  </div>
+</div>
+
+
+<script>
+const PASSWORD = "teacher123";
+const imageFiles = {};
+
+
+// Handle image uploads
+function handleImageUpload(inputId, thumbId){
+  const input = document.getElementById(inputId);
+  const thumb = document.getElementById(thumbId);
+  input.addEventListener('change', e=>{
+    const file = e.target.files[0];
+    if(file){
+      const reader = new FileReader();
+      reader.onload = function(ev){
+        imageFiles[inputId] = ev.target.result;
+        thumb.src = ev.target.result;
+        thumb.classList.remove('hidden');
+      }
+      reader.readAsDataURL(file);
+    }
+  });
+}
+for(let i=1;i<=8;i++){ handleImageUpload('img'+i,'thumb'+i); }
+
+
+// Preview student answers
+function previewStudent(){
+  const preview = document.getElementById('previewArea');
+  const team = document.getElementById('teamName').value.trim() || 'Unnamed Team';
+  let html=`<h3>Preview for ${team}</h3>`;
+  for(let i=1;i<=8;i++){
+    html+=`<p><strong>Q${i}:</strong> ${document.getElementById('q'+i).value}</p>`;
+    if(imageFiles['img'+i]) html+=`<img class="fullimg" src="${imageFiles['img'+i]}">`;
+  }
+  preview.innerHTML = html;
+  preview.classList.remove('hidden');
+}
+
+
+// Submit student answers with validation and timer check
+function submitStudent(){
+  if(totalTime<=0){
+    alert('Time is up! Submission is disabled.');
+    return;
+  }
+  
+  const team = document.getElementById('teamName').value.trim();
+  if(!team){
+    alert('Please enter your team/student name.');
+    return;
+  }
+  
+  const missing = [];
+  const submission = {time:new Date().toISOString(),team,score:""};
+  
+  for(let i=1;i<=8;i++){
+    const answer = document.getElementById('q'+i).value.trim();
+    submission['q'+i] = answer;
+    submission['img'+i] = imageFiles['img'+i] || "";
+    if(!answer) missing.push('Q'+i);
+  }
+  
+  if(missing.length){
+    alert('Please answer the following questions before submitting:\n' + missing.join(', '));
+    return;
+  }
+  
+  const stored = JSON.parse(localStorage.getItem('hunt_submissions')||'[]');
+  stored.push(submission);
+  localStorage.setItem('hunt_submissions',JSON.stringify(stored));
+  document.getElementById('status').textContent = 'Saved locally ✔';
+  alert('Responses and screenshots saved locally.');
+}
+
+
+// Teacher login & load submissions
+function unlockTeacher(){
+  const pass = document.getElementById('teacherPass').value;
+  if(pass!==PASSWORD){alert('Incorrect password'); return;}
+  document.getElementById('teacherPanel').classList.remove('hidden');
+  loadSubmissions();
+}
+
+
+function loadSubmissions(){
+  const stored = JSON.parse(localStorage.getItem('hunt_submissions')||'[]');
+  const container = document.getElementById('submissionContainer');
+  container.innerHTML='';
+  stored.forEach((s,i)=>{
+    const section = document.createElement('div');
+    section.innerHTML=`
+      <button class="collapsible">${s.team} - ${s.time}</button>
+      <div class="content">
+        ${[1,2,3,4,5,6,7,8].map(j=>`
+          <p><strong>Q${j}:</strong> ${s['q'+j]}</p>
+          ${s['img'+j]?`<img class="fullimg" src="${s['img'+j]}">` : ''}
+        `).join('')}
+        <label>Score: <input type="number" value="${s.score}" onchange="updateScore(${i},this.value)"></label>
+      </div>
+    `;
+    container.appendChild(section);
+  });
+
+
+  const coll = document.getElementsByClassName("collapsible");
+  for (let i=0;i<coll.length;i++){
+    coll[i].addEventListener("click", function(){
+      this.classList.toggle("active");
+      const content=this.nextElementSibling;
+      content.style.display=(content.style.display==="block")?"none":"block";
+    });
+  }
+}
+
+
+// Update score in localStorage
+function updateScore(index,value){
+  const stored = JSON.parse(localStorage.getItem('hunt_submissions')||'[]');
+  stored[index].score = value;
+  localStorage.setItem('hunt_submissions',JSON.stringify(stored));
+}
+
+
+// Download CSV with Base64 images
+function downloadCSV(){
+  const stored = JSON.parse(localStorage.getItem('hunt_submissions')||'[]');
+  if(!stored.length){ alert('No submissions yet.'); return; }
+  const keys = Object.keys(stored[0]);
+  const csv = [keys.join(',')].concat(stored.map(r=>keys.map(k=>JSON.stringify(r[k]||'')).join(','))).join('\n');
+  const blob = new Blob([csv],{type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='jonesboro_hunt_submissions.csv';
+  document.body.appendChild(a); a.click(); URL.revokeObjectURL(url); a.remove();
+}
+
+
+// Clear all submissions
+function clearAllSubmissions(){
+  if(confirm('Are you sure you want to delete ALL submissions? This cannot be
